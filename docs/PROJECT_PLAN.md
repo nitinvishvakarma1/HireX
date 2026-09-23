@@ -108,12 +108,12 @@ user-facing API so a stuck browser job never blocks a web request.
 
 | Layer | Technology | Notes |
 |-------|-----------|-------|
-| Frontend | Next.js (App Router), TypeScript, Tailwind, shadcn/ui | SSR dashboard, responsive web-first |
+| Frontend | Next.js (App Router), TypeScript, Tailwind, Cloudscape Design System | SSR dashboard, responsive web-first |
 | API | NestJS (TypeScript) | Auth, REST, WebSocket/SSE, orchestration |
 | Worker | Python + FastAPI + Celery/RQ | Parsing, matching, tailoring, automation |
 | Automation | Playwright | Form fill, ATS interaction |
 | AI | Claude (Anthropic API) | Tailoring, matching, cover letters |
-| Data | PostgreSQL + Prisma; Redis | Relational data; cache + queue |
+| Data | Supabase (PostgreSQL) + Prisma, pgvector; Redis | Relational data + embeddings; cache + queue |
 | Queue | BullMQ (Node) / Celery (Python) | Background jobs, retries, rate limits |
 | Auth | Auth.js / Clerk or NestJS JWT + OAuth | Email + Google/LinkedIn login |
 | Storage | S3-compatible | Resumes, generated documents |
@@ -137,6 +137,28 @@ User → Next.js dashboard → NestJS API
                               ▼
                 External: ATS / job boards / email
 ```
+
+### 4.4 Database choice: MongoDB Atlas vs Supabase Postgres
+
+**Recommendation: Supabase (managed PostgreSQL).** HireX's data is strongly
+relational — users, resumes, profiles, companies, jobs, applications, the
+status pipeline, outreach logs, suppression lists — with many relationships and a need
+for transactions (an application submission must be consistent) and rich querying.
+That is a relational/Postgres fit, not a document-store fit.
+
+Why Supabase specifically over plain Postgres or MongoDB Atlas:
+- **Relational integrity + transactions + SQL** — the right model for this domain, and
+  SQL is a generalized, widely-known skill (matches our "generalized approaches" rule).
+- **`pgvector` built in** — store embeddings for **semantic job matching** in the same
+  database, no separate vector store.
+- **Batteries included** — managed Postgres plus auth, object storage, row-level
+  security, and realtime, which accelerate the MVP. Use as much or as little as you
+  want; NestJS + Prisma can treat it as "just Postgres" and own auth itself.
+- Mongo's flexible schema is nice for freeform resume/job JSON, but we get that with
+  Postgres `jsonb` where needed, without giving up relational guarantees.
+
+Prisma is the ORM either way; the repository layer isolates the DB so a future move is
+contained.
 
 ## 5. Legal, ethical & compliance
 

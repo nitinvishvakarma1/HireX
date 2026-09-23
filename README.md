@@ -40,11 +40,11 @@ automates the tedious parts while keeping **you in control**:
 
 | Layer | Choice |
 |-------|--------|
-| Frontend | **Next.js** (React, TypeScript, App Router) + Tailwind CSS |
+| Frontend | **Next.js** (React, TypeScript, App Router) + Tailwind CSS + Cloudscape Design System |
 | Backend API | **NestJS** (TypeScript) |
 | AI / Automation worker | **Python (FastAPI)** service — resume parsing, LLM tailoring, browser automation |
 | Queue / jobs | BullMQ (Redis) |
-| Database | PostgreSQL (+ Prisma), Redis (cache/queue) |
+| Database | Supabase (PostgreSQL) + Prisma, pgvector; Redis (cache/queue) |
 | AI | Claude (Anthropic) for tailoring, matching, cover letters |
 | Automation | Playwright (form filling, ATS interaction) |
 | Infra | Docker, cloud (AWS/GCP/Render) |
@@ -56,6 +56,7 @@ rationale behind the backend choice.
 
 - 📋 [Project Plan](docs/PROJECT_PLAN.md) — vision, scope, architecture, roadmap, legal.
 - ✅ [Requirements](docs/REQUIREMENTS.md) — functional & non-functional requirements, user stories.
+- 📐 [Engineering Rulebook](docs/ENGINEERING_GUIDELINES.md) — coding standards every contributor follows.
 
 ## License
 
