@@ -1,6 +1,6 @@
 import { Injectable, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import { PrismaClient } from '@prisma/client';
-import { InjectPinoLogger, PinoLogger } from 'nestjs-pino';
+import { PinoLogger } from 'nestjs-pino';
 
 import { AppConfigService } from '../config';
 
@@ -19,7 +19,6 @@ export class PrismaService
 {
   constructor(
     private readonly config: AppConfigService,
-    @InjectPinoLogger(PrismaService.name)
     private readonly logger: PinoLogger,
   ) {
     super({
@@ -28,6 +27,7 @@ export class PrismaService
         ? [{ emit: 'stdout', level: 'warn' }]
         : [{ emit: 'stdout', level: 'query' }],
     });
+    this.logger.setContext(PrismaService.name);
   }
 
   async onModuleInit(): Promise<void> {

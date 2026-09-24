@@ -1,106 +1,40 @@
 "use client";
 
-import { useMemo, useState, type ReactNode } from "react";
-import { usePathname, useRouter } from "next/navigation";
-
-import AppLayout from "@cloudscape-design/components/app-layout";
-import SideNavigation, {
-  type SideNavigationProps,
-} from "@cloudscape-design/components/side-navigation";
-import TopNavigation from "@cloudscape-design/components/top-navigation";
-
-/** Primary navigation model — single source of truth for top + side nav. */
-const NAV_ITEMS: ReadonlyArray<{ text: string; href: string }> = [
-  { text: "Dashboard", href: "/" },
-  { text: "Matches", href: "/matches" },
-  { text: "Applications", href: "/applications" },
-];
-
-const SIDE_NAV_ITEMS: SideNavigationProps.Item[] = [
-  { type: "link", text: "Dashboard", href: "/" },
-  { type: "link", text: "Matches", href: "/matches" },
-  { type: "link", text: "Applications", href: "/applications" },
-];
+import type { ReactNode } from "react";
+import dynamic from "next/dynamic";
 
 /**
- * Application shell: Cloudscape AppLayout with a TopNavigation header and a
- * SideNavigation, wired to the Next.js App Router (ENGINEERING_GUIDELINES §11).
- * Navigation is handled client-side via `router.push` while preserving the
- * browser's accessible link semantics.
+ * Client-only application shell.
+ *
+ * Cloudscape's visual-refresh `AppLayout` derives its layout from the live DOM
+ * and cannot be server-rendered without hydration mismatches, so the shell body
+ * is loaded with `ssr: false`. A minimal, dependency-free placeholder is shown
+ * for the brief moment before the client bundle mounts (the shell renders no
+ * data itself — pages fetch client-side).
  */
-export function AppShell({ children }: { children: ReactNode }): ReactNode {
-  const router = useRouter();
-  const pathname = usePathname();
-  const [navigationOpen, setNavigationOpen] = useState(true);
-
-  const activeHref = useMemo(() => {
-    // Longest matching nav href wins so "/matches/123" highlights "Matches".
-    const match = [...NAV_ITEMS]
-      .filter((item) => pathname === item.href || pathname.startsWith(`${item.href}/`))
-      .sort((a, b) => b.href.length - a.href.length)[0];
-    return match?.href ?? "/";
-  }, [pathname]);
-
-  return (
-    <>
-      <div id="top-navigation">
-        <TopNavigation
-          identity={{
-            href: "/",
-            title: "HireX",
-            onFollow: (event) => {
-              event.preventDefault();
-              router.push("/");
-            },
-          }}
-          utilities={[
-            {
-              type: "button",
-              iconName: "notification",
-              ariaLabel: "Notifications",
-              badge: true,
-              disableUtilityCollapse: false,
-            },
-            {
-              type: "menu-dropdown",
-              text: "Candidate",
-              description: "candidate@example.com",
-              iconName: "user-profile",
-              ariaLabel: "Account menu",
-              items: [
-                { id: "profile", text: "Profile" },
-                { id: "preferences", text: "Job preferences" },
-                { id: "signout", text: "Sign out" },
-              ],
-            },
-          ]}
-        />
-      </div>
-      <AppLayout
-        headerSelector="#top-navigation"
-        navigationOpen={navigationOpen}
-        onNavigationChange={({ detail }) => setNavigationOpen(detail.open)}
-        toolsHide
-        ariaLabels={{
-          navigation: "Primary navigation",
-          navigationToggle: "Open navigation",
-          navigationClose: "Close navigation",
+const AppShellInner = dynamic(
+  () => import("./AppShellInner").then((m) => m.AppShellInner),
+  {
+    ssr: false,
+    loading: () => (
+      <div
+        role="status"
+        aria-label="Loading HireX"
+        style={{
+          minHeight: "100vh",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          color: "#5f6b7a",
+          font: "500 14px/1.4 system-ui, sans-serif",
         }}
-        navigation={
-          <SideNavigation
-            activeHref={activeHref}
-            header={{ href: "/", text: "HireX" }}
-            items={SIDE_NAV_ITEMS}
-            onFollow={(event) => {
-              if (!event.detail.external) {
-                event.preventDefault();
-                router.push(event.detail.href);
-              }
-            }}
-          />
-        }
-        content={children}
-      />
-    </>
-  );
+      >
+        Loading HireX…
+      </div>
+    ),
+  },
+);
+
+export function AppShell({ children }: { children: ReactNode }): ReactNode {
+  return <AppShellInner>{children}</AppShellInner>;
 }

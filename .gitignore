@@ -10,6 +10,10 @@ build/
 .next/
 out/
 *.tsbuildinfo
+.turbo/
+
+# Local tooling (machine-specific; keep shareable configs like .claude/launch.json)
+.claude/settings.local.json
 
 # Environment / secrets
 .env

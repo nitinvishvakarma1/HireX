@@ -39,8 +39,9 @@ export const envSchema = z.object({
   STORAGE_S3_SECRET_ACCESS_KEY: z.string().min(1),
   STORAGE_BUCKET: z.string().min(1),
 
-  // AI
-  ANTHROPIC_API_KEY: z.string().min(1),
+  // AI — owned by the Python worker, not the API. Optional here so the API can
+  // boot without it; the worker validates its own required ANTHROPIC_API_KEY.
+  ANTHROPIC_API_KEY: z.string().optional(),
 });
 
 export type Env = z.infer<typeof envSchema>;
@@ -64,7 +65,7 @@ export interface AppConfig {
     readonly bucket: string;
   };
   readonly anthropic: {
-    readonly apiKey: string;
+    readonly apiKey?: string;
   };
 }
 

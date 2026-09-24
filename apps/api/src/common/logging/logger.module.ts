@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 
-import { Module } from '@nestjs/common';
+import { Global, Module } from '@nestjs/common';
 import { LoggerModule } from 'nestjs-pino';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 
@@ -18,7 +18,11 @@ const REQUEST_ID_HEADER = 'x-request-id';
  *   inbound `x-correlation-id`/`x-request-id` header or generated per request.
  * - Secrets (auth headers, cookies) are redacted; PII is never logged wholesale.
  * - Pretty transport in development; raw JSON in test/production for log shippers.
+ *
+ * Global so `PinoLogger` can be injected by any provider (e.g. PrismaService)
+ * without every feature module re-importing the logger.
  */
+@Global()
 @Module({
   imports: [
     LoggerModule.forRootAsync({
@@ -58,5 +62,6 @@ const REQUEST_ID_HEADER = 'x-request-id';
       }),
     }),
   ],
+  exports: [LoggerModule],
 })
 export class AppLoggerModule {}
