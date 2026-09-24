@@ -8,8 +8,8 @@
 
 ---
 
-> **Status:** 🚧 Planning / pre-MVP. This repository currently contains the project
-> plan, requirements, and architecture. No application code yet.
+> **Status:** 🚧 Early development. Planning docs are complete and the monorepo
+> scaffold (web · api · worker · shared · prisma) is being built out.
 
 ## What is HireX?
 
@@ -51,6 +51,45 @@ automates the tedious parts while keeping **you in control**:
 
 See [docs/PROJECT_PLAN.md](docs/PROJECT_PLAN.md#4-architecture--tech-stack) for the
 rationale behind the backend choice.
+
+## Repository structure
+
+```
+hirex/
+├── apps/
+│   ├── web/       # Next.js + Cloudscape frontend (@hirex/web)
+│   ├── api/       # NestJS API (@hirex/api)
+│   └── worker/    # Python FastAPI AI/automation worker
+├── packages/
+│   └── shared/    # Shared TypeScript types & DTOs (@hirex/shared)
+├── prisma/        # Prisma schema (Supabase Postgres + pgvector)
+├── docs/          # Plan, requirements, engineering rulebook
+└── docker-compose.yml  # Local Redis
+```
+
+## Getting started
+
+```bash
+cp .env.example .env      # fill in real values (Supabase, Redis, Anthropic)
+docker compose up -d      # local Redis
+npm install               # install workspace deps
+npm run dev:api           # start the API
+npm run dev:web           # start the web app (separate terminal)
+# Python worker:
+cd apps/worker && pip install -r requirements.txt && uvicorn app.main:app --reload
+```
+
+## Branching model
+
+| Branch | Role |
+|--------|------|
+| `master` | Production (protected) |
+| `main` | Post-deploy sync of `master` |
+| `development` | Integration / staging — features merge here first |
+| `feat/*` | Feature branches (also `fix/*`, `chore/*`, `docs/*`) |
+
+Flow: `feat/*` → `development` → `master` (prod) → `main` (synced after deploy).
+Details in the [Engineering Rulebook](docs/ENGINEERING_GUIDELINES.md#13-git--branching-workflow).
 
 ## Documentation
 

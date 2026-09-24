@@ -1,0 +1,370 @@
+// HireX — Prisma schema for Supabase (PostgreSQL).
+//
+// Conventions (see docs/ENGINEERING_GUIDELINES.md §12):
+//  - Migrations only; never hand-edit the production schema.
+//  - Constraints live in the DB (FKs, unique, not-null) as the last line of defense.
+//  - Index real query paths; paginate list reads (cursor-based) in the app layer.
+//  - PII columns are flagged inline; handle per PLAN §5 (encryption, export, erasure).
+//  - `pgvector` powers semantic job matching (embeddings on Job & CandidateProfile).
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL") // no hard-coded URL — comes from validated env
+  // Requires the `vector` (pgvector) extension. In Supabase enable it once with:
+  //   create extension if not exists vector;
+  // (Dashboard: Database → Extensions → enable "vector", or run the SQL above.)
+  extensions = [vector]
+}
+
+generator client {
+  provider = "prisma-client-js"
+  // postgresqlExtensions: lets Prisma manage the pgvector extension (above).
+  previewFeatures = ["postgresqlExtensions"]
+}
+
+// ---------------------------------------------------------------------------
+// Enums — mirror @hirex/shared so the DB and TS contracts stay in lockstep.
+// ---------------------------------------------------------------------------
+
+/// Application pipeline stages (REQUIREMENTS FR-7.1).
+enum ApplicationStatus {
+  MATCHED
+  APPLIED
+  SCREENING
+  INTERVIEW
+  OFFER
+  REJECTED
+}
+
+/// Who triggered an audited action.
+enum ActorKind {
+  USER
+  SYSTEM
+}
+
+enum SeniorityLevel {
+  INTERN
+  ENTRY
+  JUNIOR
+  MID
+  SENIOR
+  LEAD
+  PRINCIPAL
+  EXECUTIVE
+}
+
+enum EmploymentType {
+  FULL_TIME
+  PART_TIME
+  CONTRACT
+  INTERNSHIP
+  TEMPORARY
+}
+
+enum RemotePolicy {
+  REMOTE
+  HYBRID
+  ONSITE
+}
+
+enum OAuthProvider {
+  GOOGLE
+  LINKEDIN
+}
+
+enum ResumeFileType {
+  PDF
+  DOCX
+}
+
+enum OutreachChannel {
+  EMAIL
+}
+
+enum OutreachStatus {
+  QUEUED
+  SENT
+  DELIVERED
+  BOUNCED
+  COMPLAINED
+  FAILED
+  SUPPRESSED
+  UNSUBSCRIBED
+}
+
+enum SuppressionReason {
+  UNSUBSCRIBE
+  BOUNCE
+  COMPLAINT
+  MANUAL
+}
+
+// ---------------------------------------------------------------------------
+// Models
+// ---------------------------------------------------------------------------
+
+/// An authenticated account holder (REQUIREMENTS FR-1).
+/// PII: email, displayName. Erasable on request (GDPR) — cascades to owned data.
+model User {
+  id              String          @id @default(uuid()) @db.Uuid
+  email           String          @unique // PII
+  displayName     String? // PII
+  emailVerified   Boolean         @default(false)
+  /// Secret: password hash (argon2/bcrypt). Never selected into API responses.
+  passwordHash    String?
+  linkedProviders OAuthProvider[]
+
+  profile      CandidateProfile?
+  resumes      Resume[]
+  applications Application[]
+  matches      Match[]
+  outreachLogs OutreachLog[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([createdAt])
+}
+
+/// A user's search preferences and derived profile (REQUIREMENTS FR-2, FR-3).
+/// One-to-one with User.
+model CandidateProfile {
+  id                   String          @id @default(uuid()) @db.Uuid
+  userId               String          @unique @db.Uuid
+  headline             String? // PII
+  summary              String? // PII
+  skills               String[]
+  yearsOfExperience    Int?
+  seniority            SeniorityLevel?
+  targetRoles          String[]
+  targetIndustries     String[]
+  remotePolicies       RemotePolicy[]
+  /// Structured location preferences: [{ city?, state?, country }].
+  locations            Json?
+  salaryMin            Int?
+  salaryMax            Int?
+  salaryCurrency       String?         @db.Char(3)
+  mustHaves            String[]
+  dealBreakers         String[]
+  /// Auto-approve confidence threshold 0–100; null = off (REQUIREMENTS FR-3.4).
+  autoApproveThreshold Int?
+
+  /// pgvector embedding for semantic matching (1536 dims, e.g. OpenAI/Voyage).
+  /// Unsupported: Prisma has no native vector type. Create the ANN index in a
+  /// migration via raw SQL, e.g.:
+  ///   CREATE INDEX candidate_profile_embedding_idx ON "CandidateProfile"
+  ///     USING hnsw (embedding vector_cosine_ops);
+  embedding Unsupported("vector(1536)")?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+}
+
+/// An uploaded resume and its parsed structure (REQUIREMENTS FR-2).
+/// PII: the file (stored encrypted in object storage) and `parsed` content.
+/// Multiple versions per user (FR-2.4); app enforces a single primary.
+model Resume {
+  id        String         @id @default(uuid()) @db.Uuid
+  userId    String         @db.Uuid
+  label     String
+  fileType  ResumeFileType
+  /// Object-storage key only — raw bytes are never stored in the DB.
+  storageKey String        @unique
+  sizeBytes Int?
+  isPrimary Boolean        @default(false)
+  /// Parsed profile (skills, experience, education). Best-effort, user-editable.
+  parsed    Json? // PII
+
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  applications Application[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, label])
+  @@index([userId])
+}
+
+/// An employer (REQUIREMENTS FR-4). Deduplicated by domain where known.
+model Company {
+  id          String  @id @default(uuid()) @db.Uuid
+  name        String
+  website     String?
+  domain      String? @unique
+  industry    String?
+  /// Structured location: { city?, state?, country }.
+  location    Json?
+  description String?
+
+  jobs Job[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([name])
+}
+
+/// An open role discovered via an ATS/job-board integration (REQUIREMENTS FR-4).
+/// Deduplicated by (source, sourceJobId).
+model Job {
+  id             String          @id @default(uuid()) @db.Uuid
+  companyId      String          @db.Uuid
+  title          String
+  description    String
+  employmentType EmploymentType?
+  seniority      SeniorityLevel?
+  remotePolicy   RemotePolicy?
+  /// Structured location: { city?, state?, country }.
+  location       Json?
+  salaryMin      Int?
+  salaryMax      Int?
+  salaryCurrency String?         @db.Char(3)
+  skills         String[]
+  /// Integration the job came from (e.g. "greenhouse", "lever", "indeed").
+  source         String
+  /// The job's id within that source.
+  sourceJobId    String
+  url            String?
+  postedAt       DateTime?
+
+  /// pgvector embedding of the job description for semantic matching (1536 dims).
+  /// Unsupported (see CandidateProfile.embedding). Add the ANN index via raw SQL:
+  ///   CREATE INDEX job_embedding_idx ON "Job"
+  ///     USING hnsw (embedding vector_cosine_ops);
+  embedding Unsupported("vector(1536)")?
+
+  company      Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  matches      Match[]
+  applications Application[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([source, sourceJobId])
+  @@index([companyId])
+  @@index([postedAt])
+}
+
+/// An explainable ranking of a Job for a candidate (REQUIREMENTS FR-4.2/4.3).
+/// One match per (user, job).
+model Match {
+  id                 String    @id @default(uuid()) @db.Uuid
+  userId             String    @db.Uuid
+  jobId              String    @db.Uuid
+  candidateProfileId String    @db.Uuid
+  /// Explainable match score, 0–100.
+  score              Float
+  /// Explanations: [{ kind, detail, weight? }] — see @hirex/shared MatchReason.
+  reasons            Json
+  dismissedAt        DateTime?
+  savedAt            DateTime?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  job  Job  @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  applications Application[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, jobId])
+  @@index([userId, score])
+  @@index([jobId])
+}
+
+/// A candidate's application to a Job and its pipeline state (FR-6, FR-7).
+/// One application per (user, job).
+model Application {
+  id                String            @id @default(uuid()) @db.Uuid
+  userId            String            @db.Uuid
+  jobId             String            @db.Uuid
+  resumeId          String?           @db.Uuid
+  matchId           String?           @db.Uuid
+  status            ApplicationStatus @default(MATCHED)
+  /// Object-storage keys for the materials actually submitted (FR-5).
+  tailoredResumeKey String?
+  coverLetterKey    String?
+  /// ATS keyword/relevance score shown before applying, 0–100 (FR-5.3).
+  atsRelevanceScore Int?
+  submittedAt       DateTime?
+  notes             String?
+
+  user   User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  job    Job     @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  resume Resume? @relation(fields: [resumeId], references: [id], onDelete: SetNull)
+  match  Match?  @relation(fields: [matchId], references: [id], onDelete: SetNull)
+
+  events       ApplicationEvent[]
+  outreachLogs OutreachLog[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, jobId])
+  @@index([userId, status])
+  @@index([jobId])
+}
+
+/// Immutable audit record of an application status transition or automated
+/// action (REQUIREMENTS FR-7, NFR-1 audit log). Append-only — no updatedAt.
+model ApplicationEvent {
+  id            String             @id @default(uuid()) @db.Uuid
+  applicationId String             @db.Uuid
+  fromStatus    ApplicationStatus?
+  toStatus      ApplicationStatus
+  actor         ActorKind
+  message       String?
+  /// Structured context (ATS response, retry count, …). Never store PII here.
+  metadata      Json?
+
+  application Application @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@index([applicationId, createdAt])
+}
+
+/// A record of every outbound message sent on a user's behalf (PLAN §5, FR-9).
+/// PII: recipientEmail. Every recipient MUST be checked against SuppressionEntry
+/// before sending; each message carries a one-click unsubscribe token.
+model OutreachLog {
+  id                String          @id @default(uuid()) @db.Uuid
+  userId            String?         @db.Uuid
+  applicationId     String?         @db.Uuid
+  channel           OutreachChannel @default(EMAIL)
+  recipientEmail    String // PII
+  subject           String?
+  status            OutreachStatus  @default(QUEUED)
+  providerMessageId String?
+  unsubscribeToken  String?         @unique
+  sentAt            DateTime?
+  /// Safe, non-sensitive failure reason for FAILED/BOUNCED.
+  error             String?
+
+  user        User?        @relation(fields: [userId], references: [id], onDelete: SetNull)
+  application Application? @relation(fields: [applicationId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([recipientEmail])
+  @@index([status])
+  @@index([userId])
+}
+
+/// Global do-not-contact list (PLAN §5.2/§5.3). `email` is unique and honored
+/// across ALL outreach; unsubscribes, bounces and complaints land here.
+model SuppressionEntry {
+  id     String            @id @default(uuid()) @db.Uuid
+  /// PII. Unique, normalized (lower-cased) address.
+  email  String            @unique
+  reason SuppressionReason
+  /// Origin of the suppression (e.g. "unsubscribe-link", "postmark-bounce").
+  source String?
+
+  createdAt DateTime @default(now())
+}

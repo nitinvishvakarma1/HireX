@@ -1,0 +1,38 @@
+{
+  "name": "@hirex/shared",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Shared domain types, DTOs, enums, and Zod schemas reused across the HireX web and API apps.",
+  "license": "MIT",
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "import": "./src/index.ts",
+      "default": "./src/index.ts"
+    }
+  },
+  "files": [
+    "src",
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "eslint \"src/**/*.ts\""
+  },
+  "dependencies": {
+    "zod": "3.23.8"
+  },
+  "devDependencies": {
+    "@typescript-eslint/eslint-plugin": "8.8.0",
+    "@typescript-eslint/parser": "8.8.0",
+    "eslint": "8.57.1",
+    "typescript": "5.5.4"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}

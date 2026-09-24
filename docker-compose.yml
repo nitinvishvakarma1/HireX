@@ -1,0 +1,16 @@
+# Local dev infrastructure for HireX.
+# Postgres + storage are provided by Supabase (see .env); this brings up Redis
+# for the queue/cache locally. Run: docker compose up -d
+services:
+  redis:
+    image: redis:7-alpine
+    container_name: hirex-redis
+    ports:
+      - "6379:6379"
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis-data:/data
+    restart: unless-stopped
+
+volumes:
+  redis-data:

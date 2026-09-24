@@ -1,0 +1,15 @@
+/**
+ * Tailwind layers. Tailwind is used ONLY for layout/spacing gaps in HireX
+ * (ENGINEERING_GUIDELINES §11); Cloudscape owns component styling. Preflight is
+ * disabled in tailwind.config.ts so this does not reset Cloudscape's styles.
+ */
+@tailwind components;
+@tailwind utilities;
+
+/* Ensure the app fills the viewport so Cloudscape AppLayout can size itself. */
+html,
+body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+}

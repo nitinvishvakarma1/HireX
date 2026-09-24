@@ -1,0 +1,18 @@
+# HireX worker — runtime dependencies (pinned).
+# Dev/lint/type tooling lives in requirements-dev.txt.
+# Install: pip install -r requirements.txt && playwright install chromium
+
+fastapi==0.115.6
+uvicorn[standard]==0.34.0
+pydantic==2.10.4
+pydantic-settings==2.7.1
+celery[redis]==5.4.0
+playwright==1.49.1
+anthropic==0.42.0
+structlog==24.4.0
+httpx==0.28.1
+
+# Testing (kept in runtime file so CI can install a single set).
+pytest==8.3.4
+pytest-asyncio==0.25.0
+pytest-mock==3.14.0

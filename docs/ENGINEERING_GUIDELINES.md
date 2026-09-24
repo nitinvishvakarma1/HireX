@@ -184,10 +184,21 @@
 - **PII columns** identified and handled per compliance (encryption, deletion).
 - Use **`pgvector`** for embeddings powering semantic job matching.
 
-## 13. Git & PR workflow
+## 13. Git & branching workflow
 
-- **Branch per change:** `feat/…`, `fix/…`, `chore/…`, `docs/…`. Never commit
-  straight to `main`.
+**Branch model (HireX convention):**
+
+| Branch | Role |
+|--------|------|
+| `master` | **Production.** Deployable, protected. Only release-ready code lands here. |
+| `main` | **Post-deploy sync** of `master` (mirrors production after each deployment). |
+| `development` | **Integration / staging.** Feature branches merge here first. |
+| `feat/<feature-name>` | Feature work. Also `fix/<name>`, `chore/<name>`, `docs/<name>`. |
+
+**Flow:** `feat/*` → PR into **`development`** → validated → promoted to **`master`**
+(production) → **`main`** synced from `master` after deployment.
+
+- **Never commit directly to `master`, `main`, or `development`** — always a branch + PR.
 - **Conventional commit messages** (`feat:`, `fix:`, `docs:`, `refactor:`, `test:`…),
   imperative, explaining the *why*.
 - **Small, focused PRs** with a description of what/why and how it was tested.
